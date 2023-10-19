@@ -14,8 +14,16 @@ In this study, we consider conversations between two parties. In `Mephisto`'s la
 
 ### __How `Mephisto` Launches Assignments__
 
-All we refer code snippets from this repository, __which is NOT the latest `Mephisto` implementation, and the logic is subject to change.__ The `_assign_unit_to_agent()` function on [L192]() is the core of this assignment launching process.
+All we refer code snippets from this repository, __which is NOT the latest `Mephisto` implementation, and the logic is subject to change.__ The `_assign_unit_to_agent()` function on L192 of [`worker_pool.py`](./packages/Mephisto/mephisto/operations/worker_pool.py) is the core of this assignment launching process. Every time a worker gets onboard, this function try to pair the new worker with a free unit. Then, it checks whether all units are filled. If so, the assignment launches; otherwise, the function simply returns (with no return value).
 
 ### __The Annoyingly Simple Timeout Implementation__
 
+The launching mechanism implies that the last worker is responsible for launching the assignment. So, we simply give the first joined worker a fallback control mechanism with `await asyncio.sleep(max_launch_timeout)` on L321. Once the agent awakes and finds any unfilled unit, it will invalidate the units and launch with a reduced list of agents. See other implementation details within the local function `_launch_assignment_after_timeout()` starting from L309. To set the maximum timeout seconds, we introduce a new parameter on L150 of [`task_run.py`](./packages/Mephisto/mephisto/data_model/task_run.py).
+
+### __Who is Handling the Reduced Agent List__
+
+For `ParlAI` chat task, the `run_assignment()` method on L213 from [`parlai_chat_task_runner.py`](./packages/Mephisto/mephisto/abstractions/blueprints/parlai_chat/parlai_chat_task_runner.py) is the driver of the task. It takes the list passed from `_assign_unit_to_agent()` and initialize a [`World`](https://parl.ai/docs/tutorial_worlds.html) object using the user-defined `ParlAIChatTaskRunner.parlai_world_module.make_world()` method on L223 or L228. You can find an example implementation on L157 of [`demo_worlds.py`](./tasks/parlai_chat_task_demo/demo_worlds.py) in the `ParlAI` chat example task, and this function is the actual implementation of `ParlAIChatTaskRunner.parlai_world_module.make_world()`.
+
 ## __Example `Mephisto` Timeout Chat Session with `ParlAI`__
+
+As stated above, `make_world()` on L157 of [`demo_worlds.py`](./tasks/parlai_chat_task_demo/demo_worlds.py) defines how we handle the reduced list of agents. In this example, we instantiated a [`ParlAI Agent`](https://parl.ai/docs/tutorial_basic.html#agents) that forwards all messages to a remote chatbot hosted at `34.71.159.56:35496` (a GCP instance). Please refer to [this repository](https://github.com/Empathic-Conversations/ParlAI-Chat) for more information about how we host a chatbot for the EC2 project using `ParlAI`. Next, one sets the maximum timeout seconds as the L14 of [`base.yaml`](./tasks/parlai_chat_task_demo/hydra_configs/conf/base.yaml) config file. Finally, one launch the demo chat task via `python parlai_test_script.py conf=YOUR_CONF_DEFINED_UNDER_HYDRA_CONFIGS_WITH_NO_SUFFIX`.
